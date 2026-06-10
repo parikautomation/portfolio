@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f1117">
+<title>Portfolio</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --bg:       #0f1117;
+    --bg2:      #181c27;
+    --bg3:      #1f2436;
+    --border:   #2a2f45;
+    --text:     #e8eaf0;
+    --muted:    #7a82a0;
+    --pos:      #22c97a;
+    --neg:      #f04e5a;
+    --accent:   #4f8ef7;
+    --radius:   14px;
+    --radius-sm:8px;
+    --font:     -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+    --safe-b:   env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); overscroll-behavior: none; }
+
+  /* ── Layout ── */
+  #app { display: flex; flex-direction: column; height: 100%; max-width: 480px; margin: 0 auto; position: relative; }
+
+  /* ── Header ── */
+  .hdr { padding: 52px 18px 14px; background: var(--bg); position: sticky; top: 0; z-index: 10; }
+  .hdr-top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .hdr h1 { font-size: 22px; font-weight: 700; letter-spacing: -.5px; }
+  .hdr h1 span { color: var(--accent); }
+  .sync-btn { background: var(--bg3); border: 1px solid var(--border); border-radius: 20px; color: var(--text); font-size: 12px; padding: 5px 12px; cursor: pointer; display: flex; align-items: center; gap: 5px; }
+  .sync-btn:active { opacity: .7; }
+  .sync-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--pos); }
+  .sync-dot.stale { background: var(--muted); }
+  .ts-line { font-size: 11px; color: var(--muted); margin-top: 5px; }
+
+  /* ── Tabs ── */
+  .tabs { display: flex; overflow-x: auto; gap: 4px; padding: 0 18px 14px; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { flex-shrink: 0; padding: 7px 14px; border-radius: 20px; font-size: 13px; font-weight: 500; color: var(--muted); background: var(--bg3); border: 1px solid var(--border); cursor: pointer; }
+  .tab.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  /* ── Scroll body ── */
+  .body { flex: 1; overflow-y: auto; padding: 0 14px calc(80px + var(--safe-b)); scrollbar-width: none; }
+  .body::-webkit-scrollbar { display: none; }
+
+  /* ── Metric cards ── */
+  .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .metric { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; }
+  .metric.full { grid-column: 1/-1; }
+  .metric .lb { font-size: 11px; color: var(--muted); margin-bottom: 5px; font-weight: 500; text-transform: uppercase; letter-spacing: .5px; }
+  .metric .vl { font-size: 24px; font-weight: 700; line-height: 1; }
+  .metric .sub { font-size: 12px; margin-top: 5px; }
+  .pos { color: var(--pos); }
+  .neg { color: var(--neg); }
+  .muted { color: var(--muted); }
+
+  /* ── Section cards ── */
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+  .card-title { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 14px; }
+
+  /* ── Table ── */
+  .tbl-wrap { overflow-x: auto; margin: 0 -16px; padding: 0 16px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { font-size: 11px; font-weight: 600; color: var(--muted); text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; text-transform: uppercase; letter-spacing: .4px; }
+  td { padding: 10px 8px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  .tkr { background: var(--bg3); border: 1px solid var(--border); padding: 2px 8px; border-radius: 6px; font-size: 12px; font-family: 'SF Mono', monospace; font-weight: 600; }
+  .pill { display: inline-block; padding: 3px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .pill.pos { background: rgba(34,201,122,.15); color: var(--pos); }
+  .pill.neg { background: rgba(240,78,90,.15); color: var(--neg); }
+
+  /* ── Snap cards ── */
+  .snap { display: flex; flex-direction: column; gap: 8px; }
+  .scard { display: flex; justify-content: space-between; align-items: center; background: var(--bg3); border-radius: var(--radius-sm); padding: 10px 12px; }
+  .scard-l .sk { font-size: 13px; font-weight: 700; }
+  .scard-l .sh { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .scard-r { text-align: right; }
+  .scard-r .sp { font-size: 14px; font-weight: 700; }
+  .scard-r .sg { font-size: 11px; margin-top: 2px; }
+
+  /* ── Add form ── */
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .form-field { display: flex; flex-direction: column; gap: 5px; }
+  .form-field label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+  .form-field input { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 15px; padding: 11px 12px; width: 100%; }
+  .form-field input:focus { outline: none; border-color: var(--accent); }
+  .form-field.full { grid-column: 1/-1; }
+  .submit-btn { width: 100%; padding: 15px; background: var(--accent); border: none; border-radius: var(--radius); color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; letter-spacing: -.2px; }
+  .submit-btn:active { opacity: .85; }
+  .submit-btn:disabled { opacity: .4; cursor: default; }
+  .form-msg { font-size: 13px; margin-top: 10px; min-height: 18px; text-align: center; }
+
+  /* ── Price rows ── */
+  .prow { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .prow:last-child { border-bottom: none; }
+  .prow-gl { font-size: 12px; min-width: 80px; text-align: right; }
+  .prow input { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; padding: 6px 10px; width: 80px; text-align: right; }
+  .prow input:focus { outline: none; border-color: var(--accent); }
+
+  /* ── Bottom nav ── */
+  .bnav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; background: rgba(15,17,23,.92); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-top: 1px solid var(--border); display: flex; padding-bottom: var(--safe-b); z-index: 20; }
+  .bnav-btn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 10px 0; cursor: pointer; border: none; background: none; color: var(--muted); font-size: 10px; font-weight: 500; }
+  .bnav-btn.on { color: var(--accent); }
+  .bnav-icon { font-size: 22px; line-height: 1; }
+
+  /* ── Loading ── */
+  .loading { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 50vh; gap: 14px; color: var(--muted); font-size: 14px; }
+  .spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Error banner ── */
+  .err-bar { background: rgba(240,78,90,.15); border: 1px solid var(--neg); border-radius: var(--radius-sm); color: var(--neg); font-size: 13px; padding: 10px 14px; margin-bottom: 12px; }
+
+  /* ── Chart ── */
+  canvas { max-width: 100%; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="hdr">
+    <div class="hdr-top">
+      <h1>My <span>Portfolio</span></h1>
+      <button class="sync-btn" onclick="loadData(true)">
+        <span class="sync-dot" id="sdot"></span>
+        <span id="slbl">Sync</span>
+      </button>
+    </div>
+    <div class="ts-line" id="tsline">Loading from Google Sheet…</div>
+  </div>
+  <div class="tabs" id="tabs"></div>
+  <div class="body" id="body">
+    <div class="loading"><div class="spinner"></div>Loading your portfolio…</div>
+  </div>
+  <nav class="bnav" id="bnav"></nav>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+//  CONFIG — paste your deployed Apps Script URL here
+// ════════════════════════════════════════════════════════════
+const API = 'https://script.google.com/macros/s/AKfycbwcxqId2T_85JJsEoSkBzxzaYzfO6IfPG3ZaroKkabgeJeaW_LewrqgntA0e3QY_Da3OQ/exec';
+
+// ── State ───────────────────────────────────────────────────
+let lots = [], prices = {}, lastSync = null, activeTab = 'dash';
+
+// ── Formatters ──────────────────────────────────────────────
+const f  = n => '$' + Math.abs(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+const fs = n => (n >= 0 ? '+' : '-') + '$' + Math.abs(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+const fp = (g, b) => b ? (g/b*100).toFixed(1) + '%' : '–';
+const cl = n => n >= 0 ? 'pos' : 'neg';
+
+// ── Data helpers ─────────────────────────────────────────────
+function getHoldings() {
+  const m = {};
+  lots.forEach(l => {
+    if (!m[l.t]) m[l.t] = { t: l.t, shares: 0, totalCost: 0, lots: 0 };
+    m[l.t].shares    += l.q;
+    m[l.t].totalCost += l.q * l.p;
+    m[l.t].lots++;
+  });
+  return Object.values(m).map(h => ({
+    ...h,
+    avgCost: h.totalCost / h.shares,
+    today:   prices[h.t] || 0,
+    value:   (prices[h.t] || 0) * h.shares,
+    gl:      ((prices[h.t] || 0) - h.totalCost / h.shares) * h.shares
+  })).filter(h => h.today > 0).sort((a,b) => b.value - a.value);
+}
+
+// ── API ──────────────────────────────────────────────────────
+async function loadData(manual = false) {
+  const dot = document.getElementById('sdot');
+  const lbl = document.getElementById('slbl');
+  dot.className = 'sync-dot stale';
+  lbl.textContent = 'Syncing…';
+  try {
+    const res  = await fetch(API + '?action=read');
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    lots   = data.lots;
+    prices = data.prices;
+    lastSync = new Date();
+    dot.className = 'sync-dot';
+    lbl.textContent = 'Synced';
+    document.getElementById('tsline').textContent =
+      'Updated ' + lastSync.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'}) + ' · tap Sync to refresh';
+    render();
+  } catch(e) {
+    dot.className = 'sync-dot stale';
+    lbl.textContent = 'Retry';
+    document.getElementById('tsline').textContent = 'Sync failed — check connection';
+    if (manual) showErr('Could not reach Google Sheet: ' + e.message);
+  }
+}
+
+async function savePurchase(ticker, date, price, qty) {
+  const res  = await fetch(API, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'addPurchase', ticker, date, price, qty })
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+
+// ── Navigation ───────────────────────────────────────────────
+const TABS = [
+  { id: 'dash',  label: 'Dashboard', icon: '📊' },
+  { id: 'hold',  label: 'Holdings',  icon: '💼' },
+  { id: 'lots',  label: 'Lots',      icon: '🗂' },
+  { id: 'px',    label: 'Prices',    icon: '💲' },
+  { id: 'add',   label: 'Add',       icon: '➕' },
+];
+
+function buildNav() {
+  document.getElementById('tabs').innerHTML = TABS.map(t =>
+    `<div class="tab ${t.id===activeTab?'on':''}" onclick="switchTab('${t.id}')">${t.label}</div>`
+  ).join('');
+  document.getElementById('bnav').innerHTML = TABS.map(t =>
+    `<button class="bnav-btn ${t.id===activeTab?'on':''}" onclick="switchTab('${t.id}')">
+      <span class="bnav-icon">${t.icon}</span>${t.label}
+    </button>`
+  ).join('');
+}
+
+function switchTab(id) { activeTab = id; render(); }
+
+function render() {
+  buildNav();
+  const body = document.getElementById('body');
+  if      (activeTab === 'dash') body.innerHTML = renderDash();
+  else if (activeTab === 'hold') body.innerHTML = renderHoldings();
+  else if (activeTab === 'lots') body.innerHTML = renderLots();
+  else if (activeTab === 'px')   body.innerHTML = renderPrices();
+  else if (activeTab === 'add')  body.innerHTML = renderAdd();
+  if (activeTab === 'dash') drawCharts();
+  body.scrollTop = 0;
+}
+
+// ── Dashboard ────────────────────────────────────────────────
+function renderDash() {
+  const H  = getHoldings();
+  const tv = H.reduce((s,h) => s + h.value, 0);
+  const tc = H.reduce((s,h) => s + h.totalCost, 0);
+  const gl = tv - tc;
+  const best = H.reduce((b,h) => (!b || h.gl/h.totalCost > b.gl/b.totalCost) ? h : b, null);
+  const worst= H.reduce((b,h) => (!b || h.gl/h.totalCost < b.gl/b.totalCost) ? h : b, null);
+
+  return `
+  <div class="metrics">
+    <div class="metric full">
+      <div class="lb">Portfolio Value</div>
+      <div class="vl ${cl(gl)}">${f(tv)}</div>
+      <div class="sub ${cl(gl)}">${fs(gl)} unrealised &nbsp;·&nbsp; ${fp(gl,tc)} return</div>
+    </div>
+    <div class="metric">
+      <div class="lb">Invested</div>
+      <div class="vl">${f(tc)}</div>
+      <div class="sub muted">${H.length} tickers · ${lots.length} lots</div>
+    </div>
+    <div class="metric">
+      <div class="lb">Realised + Divs</div>
+      <div class="vl pos">$23,055</div>
+      <div class="sub muted">booked gains</div>
+    </div>
+    ${best ? `<div class="metric">
+      <div class="lb">Best Return</div>
+      <div class="vl pos">${best.t}</div>
+      <div class="sub pos">+${fp(best.gl, best.totalCost)}</div>
+    </div>` : ''}
+    ${worst ? `<div class="metric">
+      <div class="lb">Worst Return</div>
+      <div class="vl neg">${worst.t}</div>
+      <div class="sub neg">${fp(worst.gl, worst.totalCost)}</div>
+    </div>` : ''}
+  </div>
+
+  <div class="card">
+    <div class="card-title">Unrealised G/L</div>
+    <canvas id="glChart" height="180"></canvas>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Allocation</div>
+    <canvas id="alChart" height="180"></canvas>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Top positions</div>
+    <div class="snap">
+      ${H.slice(0,8).map(h => {
+        const r = ((h.today - h.avgCost)/h.avgCost*100).toFixed(1);
+        return `<div class="scard">
+          <div class="scard-l">
+            <div class="sk">${h.t}</div>
+            <div class="sh">${h.shares.toLocaleString()} shares · avg ${f(h.avgCost)}</div>
+          </div>
+          <div class="scard-r">
+            <div class="sp">${f(h.today)}</div>
+            <div class="sg ${cl(h.gl)}">${fs(h.gl)} (${h.gl>=0?'+':''}${r}%)</div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
+
+let glC, alC;
+function drawCharts() {
+  const H = getHoldings().sort((a,b) => b.gl - a.gl);
+  const pal = ['#4f8ef7','#22c97a','#f7a84f','#c97aee','#f04e5a','#4feef7','#f7e24f','#888'];
+
+  if (glC) glC.destroy();
+  glC = new Chart(document.getElementById('glChart'), {
+    type: 'bar',
+    data: { labels: H.map(h=>h.t), datasets: [{ data: H.map(h=>+h.gl.toFixed(0)), backgroundColor: H.map(h=>h.gl>=0?'#22c97a':'#f04e5a'), borderRadius: 5 }] },
+    options: { responsive:true, plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>fs(c.raw)}} },
+      scales: { x:{ticks:{color:'#7a82a0',font:{size:10}},grid:{color:'#2a2f45'}},
+                y:{ticks:{callback:v=>(v>=0?'+':'')+'$'+(Math.abs(v)/1000).toFixed(0)+'k',color:'#7a82a0',font:{size:10}},grid:{color:'#2a2f45'}} } }
+  });
+
+  if (alC) alC.destroy();
+  alC = new Chart(document.getElementById('alChart'), {
+    type: 'doughnut',
+    data: { labels: H.map(h=>h.t), datasets: [{ data: H.map(h=>+h.value.toFixed(0)), backgroundColor: pal, borderWidth: 0, hoverOffset: 6 }] },
+    options: { responsive:true, cutout:'65%', plugins:{ legend:{ position:'right', labels:{color:'#7a82a0',font:{size:11},boxWidth:10} }, tooltip:{callbacks:{label:c=>c.label+': '+f(c.raw)}} } }
+  });
+}
+
+// ── Holdings ─────────────────────────────────────────────────
+function renderHoldings() {
+  const H = getHoldings();
+  return `<div class="card" style="padding:0 16px">
+    <table style="margin-top:4px">
+      <thead><tr><th>Ticker</th><th>Shares</th><th>Avg $</th><th>Now</th><th>G/L</th><th>%</th></tr></thead>
+      <tbody>
+        ${H.map(h => {
+          const r = ((h.today-h.avgCost)/h.avgCost*100).toFixed(1);
+          return `<tr>
+            <td><span class="tkr">${h.t}</span></td>
+            <td>${h.shares.toLocaleString()}</td>
+            <td>${f(h.avgCost)}</td>
+            <td style="font-weight:700">${f(h.today)}</td>
+            <td class="${cl(h.gl)}" style="font-weight:600">${fs(h.gl)}</td>
+            <td><span class="pill ${cl(h.gl)}">${h.gl>=0?'+':''}${r}%</span></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+// ── All Lots ─────────────────────────────────────────────────
+function renderLots() {
+  return `<div class="card" style="padding:0 16px">
+    <table style="margin-top:4px">
+      <thead><tr><th>Date</th><th>Ticker</th><th>Qty</th><th>Buy $</th><th>G/L</th></tr></thead>
+      <tbody>
+        ${lots.map(l => {
+          const td = prices[l.t] || 0;
+          const gl = (td - l.p) * l.q;
+          return `<tr>
+            <td class="muted" style="font-size:11px">${l.d || '–'}</td>
+            <td><span class="tkr">${l.t}</span></td>
+            <td>${l.q}</td>
+            <td>${f(l.p)}</td>
+            <td class="${cl(gl)}" style="font-size:12px;font-weight:600">${td ? fs(gl) : '–'}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+// ── Prices ───────────────────────────────────────────────────
+function renderPrices() {
+  const hm = {};
+  getHoldings().forEach(h => hm[h.t] = h);
+  return `<div class="card">
+    <div class="card-title">Today's Prices &nbsp;<span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;color:var(--muted)">Edit to override locally</span></div>
+    ${Object.keys(prices).sort().map(t => {
+      const p = prices[t], h = hm[t];
+      return `<div class="prow">
+        <span style="flex:1;font-weight:600">${t}</span>
+        <span class="${h ? cl(h.gl) : 'muted'} prow-gl">${h ? fs(h.gl) : ''}</span>
+        <input type="number" value="${p}" step="0.01" onchange="updP('${t}',this.value)">
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+function updP(t,v){ const n=parseFloat(v); if(!isNaN(n)&&n>0){prices[t]=n; render();} }
+
+// ── Add Purchase ─────────────────────────────────────────────
+function renderAdd() {
+  return `<div class="card">
+    <div class="card-title">Record a Purchase</div>
+    <div class="form-grid">
+      <div class="form-field full">
+        <label>Ticker</label>
+        <input id="at" placeholder="e.g. AAPL" style="text-transform:uppercase" autocapitalize="characters">
+      </div>
+      <div class="form-field full">
+        <label>Date</label>
+        <input id="ad" type="date" value="${new Date().toISOString().slice(0,10)}">
+      </div>
+      <div class="form-field">
+        <label>Shares</label>
+        <input id="aq" type="number" placeholder="0" min="0" inputmode="decimal">
+      </div>
+      <div class="form-field">
+        <label>Buy Price $</label>
+        <input id="ap" type="number" placeholder="0.00" step="0.01" min="0" inputmode="decimal">
+      </div>
+    </div>
+    <button class="submit-btn" id="sbtn" onclick="submitPurchase()">Save to Google Sheet</button>
+    <div class="form-msg" id="fmsg"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Recent additions</div>
+    <div class="snap" id="recent">
+      ${lots.slice(-5).reverse().map(l => `
+        <div class="scard">
+          <div class="scard-l">
+            <div class="sk">${l.t}</div>
+            <div class="sh">${l.d || 'No date'}</div>
+          </div>
+          <div class="scard-r">
+            <div class="sp">${l.q} × ${f(l.p)}</div>
+            <div class="sg muted">${f(l.q * l.p)}</div>
+          </div>
+        </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+async function submitPurchase() {
+  const t = document.getElementById('at').value.trim().toUpperCase();
+  const d = document.getElementById('ad').value;
+  const q = parseFloat(document.getElementById('aq').value);
+  const p = parseFloat(document.getElementById('ap').value);
+  const msg = document.getElementById('fmsg');
+  const btn = document.getElementById('sbtn');
+
+  if (!t || !q || !p) { msg.textContent = 'Please fill in all fields.'; msg.style.color = 'var(--neg)'; return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  msg.textContent = '';
+  try {
+    await savePurchase(t, d, p, q);
+    // Optimistically add to local state
+    lots.push({ t, d, p, q });
+    if (!prices[t]) prices[t] = p;
+    msg.textContent = `✓ Saved ${q} × ${t} @ ${f(p)} to your sheet`;
+    msg.style.color = 'var(--pos)';
+    document.getElementById('at').value = '';
+    document.getElementById('aq').value = '';
+    document.getElementById('ap').value = '';
+    btn.textContent = 'Save to Google Sheet';
+    btn.disabled = false;
+    // Re-render recent list
+    const recent = document.getElementById('recent');
+    if (recent) recent.innerHTML = lots.slice(-5).reverse().map(l => `
+      <div class="scard">
+        <div class="scard-l"><div class="sk">${l.t}</div><div class="sh">${l.d||'No date'}</div></div>
+        <div class="scard-r"><div class="sp">${l.q} × ${f(l.p)}</div><div class="sg muted">${f(l.q*l.p)}</div></div>
+      </div>`).join('');
+  } catch(e) {
+    msg.textContent = 'Save failed: ' + e.message;
+    msg.style.color = 'var(--neg)';
+    btn.textContent = 'Save to Google Sheet';
+    btn.disabled = false;
+  }
+}
+
+function showErr(msg) {
+  const body = document.getElementById('body');
+  body.insertAdjacentHTML('afterbegin', `<div class="err-bar">${msg}</div>`);
+}
+
+// ── Boot ─────────────────────────────────────────────────────
+buildNav();
+loadData();
+</script>
+</body>
+</html>
