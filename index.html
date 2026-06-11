@@ -146,7 +146,7 @@
 // ════════════════════════════════════════════════════════════
 //  CONFIG — paste your deployed Apps Script URL here
 // ════════════════════════════════════════════════════════════
-const API = 'https://script.google.com/macros/s/AKfycbwcxqId2T_85JJsEoSkBzxzaYzfO6IfPG3ZaroKkabgeJeaW_LewrqgntA0e3QY_Da3OQ/exec';
+const API = 'https://script.google.com/macros/s/AKfycbwWjOeORIhGqAjiiGwuSecuvofcgQMB9oxoHvOsDLcRXWS9uGGSkj4tccOdYS42fR4C1w/exec';
 
 // ── State ───────────────────────────────────────────────────
 let lots = [], prices = {}, lastSync = null, activeTab = 'dash';
@@ -182,7 +182,7 @@ async function loadData(manual = false) {
   dot.className = 'sync-dot stale';
   lbl.textContent = 'Syncing…';
   try {
-    const res  = await fetch(API + '?action=read');
+    const res  = await fetch(API + '?action=read&token=Dipupari12!@');
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     lots   = data.lots;
@@ -204,7 +204,7 @@ async function loadData(manual = false) {
 async function savePurchase(ticker, date, price, qty) {
   const res  = await fetch(API, {
     method: 'POST',
-    body: JSON.stringify({ action: 'addPurchase', ticker, date, price, qty })
+    body: JSON.stringify({ action: 'addPurchase', ticker, date, price, qty, token: 'Dipupari12!@' })
   });
   const data = await res.json();
   if (data.error) throw new Error(data.error);
