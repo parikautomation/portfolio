@@ -77,6 +77,17 @@
   .pill.pos { background: rgba(34,201,122,.15); color: var(--pos); }
   .pill.neg { background: rgba(240,78,90,.15); color: var(--neg); }
 
+
+  /* ── Holdings rows on dashboard ── */
+  .holding-row { display: flex; justify-content: space-between; align-items: center; padding: 11px 16px; border-bottom: 1px solid var(--border); }
+  .holding-row:last-child { border-bottom: none; }
+  .hr-left { flex: 1; min-width: 0; }
+  .hr-ticker { font-size: 14px; font-weight: 700; font-family: 'SF Mono', monospace; }
+  .hr-meta { font-size: 11px; color: var(--muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hr-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; margin-left: 12px; flex-shrink: 0; }
+  .hr-gl { font-size: 15px; font-weight: 700; }
+  .hr-pct { font-size: 12px; font-weight: 600; opacity: .85; }
+
   /* ── Snap cards ── */
   .snap { display: flex; flex-direction: column; gap: 8px; }
   .scard { display: flex; justify-content: space-between; align-items: center; background: var(--bg3); border-radius: var(--radius-sm); padding: 10px 12px; }
@@ -143,99 +154,132 @@
 </div>
 
 <script>
-// ════════════════════════════════════════════════════════════
-//  CONFIG — paste your deployed Apps Script URL here
-// ════════════════════════════════════════════════════════════
-const API = 'https://script.google.com/macros/s/AKfycbwWjOeORIhGqAjiiGwuSecuvofcgQMB9oxoHvOsDLcRXWS9uGGSkj4tccOdYS42fR4C1w/exec';
-
-// ── State ───────────────────────────────────────────────────
-let lots = [], prices = {}, lastSync = null, activeTab = 'dash';
+var API        = 'https://script.google.com/macros/s/AKfycbwcxqId2T_85JJsEoSkBzxzaYzfO6IfPG3ZaroKkabgeJeaW_LewrqgntA0e3QY_Da3OQ/exec';
+var TOKEN      = 'Dipupari12!@';
+var lots       = [];
+var prices     = {};
+var activeTab  = 'dash';
+var glC, alC;
 
 // ── Formatters ──────────────────────────────────────────────
-const f  = n => '$' + Math.abs(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
-const fs = n => (n >= 0 ? '+' : '-') + '$' + Math.abs(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
-const fp = (g, b) => b ? (g/b*100).toFixed(1) + '%' : '–';
-const cl = n => n >= 0 ? 'pos' : 'neg';
+function f(n)  { return '$' + Math.abs(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+function fs(n) { return (n >= 0 ? '+' : '-') + '$' + Math.abs(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+function fp(g, b) { return b ? (g/b*100).toFixed(1) + '%' : '0.0%'; }
+function cl(n) { return n >= 0 ? 'pos' : 'neg'; }
 
-// ── Data helpers ─────────────────────────────────────────────
+// ── Holdings aggregation ─────────────────────────────────────
 function getHoldings() {
-  const m = {};
-  lots.forEach(l => {
+  var m = {};
+  for (var i = 0; i < lots.length; i++) {
+    var l = lots[i];
     if (!m[l.t]) m[l.t] = { t: l.t, shares: 0, totalCost: 0, lots: 0 };
     m[l.t].shares    += l.q;
     m[l.t].totalCost += l.q * l.p;
     m[l.t].lots++;
-  });
-  return Object.values(m).map(h => ({
-    ...h,
-    avgCost: h.totalCost / h.shares,
-    today:   prices[h.t] || 0,
-    value:   (prices[h.t] || 0) * h.shares,
-    gl:      ((prices[h.t] || 0) - h.totalCost / h.shares) * h.shares
-  })).filter(h => h.today > 0).sort((a,b) => b.value - a.value);
+  }
+  var keys = Object.keys(m);
+  var out  = [];
+  for (var k = 0; k < keys.length; k++) {
+    var h = m[keys[k]];
+    var px = prices[h.t] || 0;
+    out.push({
+      t:         h.t,
+      shares:    h.shares,
+      totalCost: h.totalCost,
+      lots:      h.lots,
+      avgCost:   h.totalCost / h.shares,
+      today:     px,
+      value:     px * h.shares,
+      gl:        (px - h.totalCost / h.shares) * h.shares
+    });
+  }
+  out = out.filter(function(h) { return h.today > 0; });
+  out.sort(function(a, b) { return b.value - a.value; });
+  return out;
 }
 
-// ── API ──────────────────────────────────────────────────────
-async function loadData(manual = false) {
-  const dot = document.getElementById('sdot');
-  const lbl = document.getElementById('slbl');
+// ── API calls ────────────────────────────────────────────────
+function loadData(manual) {
+  var dot = document.getElementById('sdot');
+  var lbl = document.getElementById('slbl');
   dot.className = 'sync-dot stale';
   lbl.textContent = 'Syncing…';
-  try {
-    const res  = await fetch(API + '?action=read&token=Dipupari12!@');
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    lots   = data.lots;
-    prices = data.prices;
-    lastSync = new Date();
-    dot.className = 'sync-dot';
-    lbl.textContent = 'Synced';
-    document.getElementById('tsline').textContent =
-      'Updated ' + lastSync.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'}) + ' · tap Sync to refresh';
-    render();
-  } catch(e) {
-    dot.className = 'sync-dot stale';
-    lbl.textContent = 'Retry';
-    document.getElementById('tsline').textContent = 'Sync failed — check connection';
-    if (manual) showErr('Could not reach Google Sheet: ' + e.message);
-  }
+
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', API + '?action=read&token=' + encodeURIComponent(TOKEN), true);
+  xhr.onload = function() {
+    if (xhr.status === 200) {
+      try {
+        var data = JSON.parse(xhr.responseText);
+        if (data.error) throw new Error(data.error);
+        lots   = data.lots;
+        prices = data.prices;
+        dot.className = 'sync-dot';
+        lbl.textContent = 'Synced';
+        var now = new Date();
+        document.getElementById('tsline').textContent =
+          'Updated ' + now.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'}) + ' · tap Sync to refresh';
+        render();
+      } catch(e) {
+        onSyncFail(lbl, dot, manual, e.message);
+      }
+    } else {
+      onSyncFail(lbl, dot, manual, 'HTTP ' + xhr.status);
+    }
+  };
+  xhr.onerror = function() { onSyncFail(lbl, dot, manual, 'Network error'); };
+  xhr.send();
 }
 
-async function savePurchase(ticker, date, price, qty) {
-  const res  = await fetch(API, {
-    method: 'POST',
-    body: JSON.stringify({ action: 'addPurchase', ticker, date, price, qty, token: 'Dipupari12!@' })
-  });
-  const data = await res.json();
-  if (data.error) throw new Error(data.error);
-  return data;
+function onSyncFail(lbl, dot, manual, msg) {
+  dot.className = 'sync-dot stale';
+  lbl.textContent = 'Retry';
+  document.getElementById('tsline').textContent = 'Sync failed — tap Retry';
+  if (manual) showErr('Could not reach Google Sheet: ' + msg);
+}
+
+function savePurchase(ticker, date, price, qty, onSuccess, onFail) {
+  var xhr = new XMLHttpRequest();
+  xhr.open('POST', API, true);
+  xhr.setRequestHeader('Content-Type', 'text/plain');
+  xhr.onload = function() {
+    try {
+      var data = JSON.parse(xhr.responseText);
+      if (data.error) { onFail(data.error); return; }
+      onSuccess(data);
+    } catch(e) { onFail(e.message); }
+  };
+  xhr.onerror = function() { onFail('Network error'); };
+  xhr.send(JSON.stringify({ action: 'addPurchase', ticker: ticker, date: date, price: price, qty: qty, token: TOKEN }));
 }
 
 // ── Navigation ───────────────────────────────────────────────
-const TABS = [
-  { id: 'dash',  label: 'Dashboard', icon: '📊' },
-  { id: 'hold',  label: 'Holdings',  icon: '💼' },
-  { id: 'lots',  label: 'Lots',      icon: '🗂' },
-  { id: 'px',    label: 'Prices',    icon: '💲' },
-  { id: 'add',   label: 'Add',       icon: '➕' },
+var TABS = [
+  { id: 'dash', label: 'Dashboard', icon: '&#x1F4CA;' },
+  { id: 'hold', label: 'Holdings',  icon: '&#x1F4BC;' },
+  { id: 'lots', label: 'Lots',      icon: '&#x1F5C2;' },
+  { id: 'px',   label: 'Prices',    icon: '&#x1F4B2;' },
+  { id: 'add',  label: 'Add',       icon: '&#x2795;'  }
 ];
-
-function buildNav() {
-  document.getElementById('tabs').innerHTML = TABS.map(t =>
-    `<div class="tab ${t.id===activeTab?'on':''}" onclick="switchTab('${t.id}')">${t.label}</div>`
-  ).join('');
-  document.getElementById('bnav').innerHTML = TABS.map(t =>
-    `<button class="bnav-btn ${t.id===activeTab?'on':''}" onclick="switchTab('${t.id}')">
-      <span class="bnav-icon">${t.icon}</span>${t.label}
-    </button>`
-  ).join('');
-}
 
 function switchTab(id) { activeTab = id; render(); }
 
+function buildNav() {
+  var tabHtml = '', navHtml = '';
+  for (var i = 0; i < TABS.length; i++) {
+    var t = TABS[i];
+    var on = t.id === activeTab ? ' on' : '';
+    tabHtml += '<div class="tab' + on + '" onclick="switchTab('' + t.id + '')">' + t.label + '</div>';
+    navHtml += '<button class="bnav-btn' + on + '" onclick="switchTab('' + t.id + '')">'
+             + '<span class="bnav-icon">' + t.icon + '</span>' + t.label + '</button>';
+  }
+  document.getElementById('tabs').innerHTML = tabHtml;
+  document.getElementById('bnav').innerHTML  = navHtml;
+}
+
 function render() {
   buildNav();
-  const body = document.getElementById('body');
+  var body = document.getElementById('body');
   if      (activeTab === 'dash') body.innerHTML = renderDash();
   else if (activeTab === 'hold') body.innerHTML = renderHoldings();
   else if (activeTab === 'lots') body.innerHTML = renderLots();
@@ -247,249 +291,262 @@ function render() {
 
 // ── Dashboard ────────────────────────────────────────────────
 function renderDash() {
-  const H  = getHoldings();
-  const tv = H.reduce((s,h) => s + h.value, 0);
-  const tc = H.reduce((s,h) => s + h.totalCost, 0);
-  const gl = tv - tc;
-  const best = H.reduce((b,h) => (!b || h.gl/h.totalCost > b.gl/b.totalCost) ? h : b, null);
-  const worst= H.reduce((b,h) => (!b || h.gl/h.totalCost < b.gl/b.totalCost) ? h : b, null);
+  var H  = getHoldings();
+  var tv = 0, tc = 0;
+  for (var i = 0; i < H.length; i++) { tv += H[i].value; tc += H[i].totalCost; }
+  var gl = tv - tc;
 
-  return `
-  <div class="metrics">
-    <div class="metric full">
-      <div class="lb">Portfolio Value</div>
-      <div class="vl ${cl(gl)}">${f(tv)}</div>
-      <div class="sub ${cl(gl)}">${fs(gl)} unrealised &nbsp;·&nbsp; ${fp(gl,tc)} return</div>
-    </div>
-    <div class="metric">
-      <div class="lb">Invested</div>
-      <div class="vl">${f(tc)}</div>
-      <div class="sub muted">${H.length} tickers · ${lots.length} lots</div>
-    </div>
-    <div class="metric">
-      <div class="lb">Realised + Divs</div>
-      <div class="vl pos">$23,055</div>
-      <div class="sub muted">booked gains</div>
-    </div>
-    ${best ? `<div class="metric">
-      <div class="lb">Best Return</div>
-      <div class="vl pos">${best.t}</div>
-      <div class="sub pos">+${fp(best.gl, best.totalCost)}</div>
-    </div>` : ''}
-    ${worst ? `<div class="metric">
-      <div class="lb">Worst Return</div>
-      <div class="vl neg">${worst.t}</div>
-      <div class="sub neg">${fp(worst.gl, worst.totalCost)}</div>
-    </div>` : ''}
-  </div>
+  var best = null, worst = null;
+  for (var j = 0; j < H.length; j++) {
+    var r = H[j].gl / H[j].totalCost;
+    if (!best  || r > best.gl  / best.totalCost)  best  = H[j];
+    if (!worst || r < worst.gl / worst.totalCost)  worst = H[j];
+  }
 
-  <div class="card">
-    <div class="card-title">Unrealised G/L</div>
-    <canvas id="glChart" height="180"></canvas>
-  </div>
+  var holdingRows = '';
+  for (var k = 0; k < H.length; k++) {
+    var h       = H[k];
+    var ret     = h.gl;
+    var retPct  = ((h.today - h.avgCost) / h.avgCost * 100).toFixed(1);
+    var sign    = ret >= 0 ? '+' : '';
+    var glCls   = cl(ret);
+    holdingRows += '<div class="holding-row">'
+      + '<div class="hr-left">'
+      + '<div class="hr-ticker">' + h.t + '</div>'
+      + '<div class="hr-meta">' + h.shares.toLocaleString() + ' sh &nbsp;&middot;&nbsp; avg ' + f(h.avgCost) + ' &nbsp;&middot;&nbsp; now ' + f(h.today) + '</div>'
+      + '</div>'
+      + '<div class="hr-right">'
+      + '<div class="hr-gl ' + glCls + '">' + sign + f(ret) + '</div>'
+      + '<div class="hr-pct ' + glCls + '">' + sign + retPct + '%</div>'
+      + '</div></div>';
+  }
 
-  <div class="card">
-    <div class="card-title">Allocation</div>
-    <canvas id="alChart" height="180"></canvas>
-  </div>
+  var bestHtml  = best  ? '<div class="metric"><div class="lb">Best Return</div><div class="vl pos">'  + best.t  + '</div><div class="sub pos">+'  + fp(best.gl,  best.totalCost)  + '</div></div>' : '';
+  var worstHtml = worst ? '<div class="metric"><div class="lb">Worst Return</div><div class="vl neg">' + worst.t + '</div><div class="sub neg">'     + fp(worst.gl, worst.totalCost) + '</div></div>' : '';
 
-  <div class="card">
-    <div class="card-title">Top positions</div>
-    <div class="snap">
-      ${H.slice(0,8).map(h => {
-        const r = ((h.today - h.avgCost)/h.avgCost*100).toFixed(1);
-        return `<div class="scard">
-          <div class="scard-l">
-            <div class="sk">${h.t}</div>
-            <div class="sh">${h.shares.toLocaleString()} shares · avg ${f(h.avgCost)}</div>
-          </div>
-          <div class="scard-r">
-            <div class="sp">${f(h.today)}</div>
-            <div class="sg ${cl(h.gl)}">${fs(h.gl)} (${h.gl>=0?'+':''}${r}%)</div>
-          </div>
-        </div>`;
-      }).join('')}
-    </div>
-  </div>`;
+  return '<div class="metrics">'
+    + '<div class="metric full">'
+    + '<div class="lb">Portfolio Value</div>'
+    + '<div class="vl ' + cl(gl) + '">' + f(tv) + '</div>'
+    + '<div class="sub ' + cl(gl) + '">' + fs(gl) + ' unrealised &nbsp;&middot;&nbsp; ' + fp(gl,tc) + ' return</div>'
+    + '</div>'
+    + '<div class="metric"><div class="lb">Invested</div><div class="vl">' + f(tc) + '</div><div class="sub muted">' + H.length + ' tickers &middot; ' + lots.length + ' lots</div></div>'
+    + '<div class="metric"><div class="lb">Realised + Divs</div><div class="vl pos">$23,055</div><div class="sub muted">booked gains</div></div>'
+    + bestHtml + worstHtml
+    + '</div>'
+    + '<div class="card"><div class="card-title">Unrealised G/L</div><canvas id="glChart" height="180"></canvas></div>'
+    + '<div class="card"><div class="card-title">Allocation</div><canvas id="alChart" height="180"></canvas></div>'
+    + '<div class="card" style="padding:0;overflow:hidden">'
+    + '<div class="card-title" style="padding:14px 16px 10px">Holdings &amp; Total Return</div>'
+    + holdingRows
+    + '</div>';
 }
 
-let glC, alC;
+// ── Charts ───────────────────────────────────────────────────
 function drawCharts() {
-  const H = getHoldings().sort((a,b) => b.gl - a.gl);
-  const pal = ['#4f8ef7','#22c97a','#f7a84f','#c97aee','#f04e5a','#4feef7','#f7e24f','#888'];
+  var H   = getHoldings().slice().sort(function(a,b){ return b.gl - a.gl; });
+  var pal = ['#4f8ef7','#22c97a','#f7a84f','#c97aee','#f04e5a','#4feef7','#f7e24f','#888780','#5dcaa5','#f09595','#ef9f27','#afa9ec'];
+  var glEl = document.getElementById('glChart');
+  var alEl = document.getElementById('alChart');
+  if (!glEl || !alEl) return;
+
+  var labels  = [], glData = [], glColors = [], alData = [];
+  for (var i = 0; i < H.length; i++) {
+    labels.push(H[i].t);
+    glData.push(Math.round(H[i].gl));
+    glColors.push(H[i].gl >= 0 ? '#22c97a' : '#f04e5a');
+    alData.push(Math.round(H[i].value));
+  }
 
   if (glC) glC.destroy();
-  glC = new Chart(document.getElementById('glChart'), {
+  glC = new Chart(glEl, {
     type: 'bar',
-    data: { labels: H.map(h=>h.t), datasets: [{ data: H.map(h=>+h.gl.toFixed(0)), backgroundColor: H.map(h=>h.gl>=0?'#22c97a':'#f04e5a'), borderRadius: 5 }] },
-    options: { responsive:true, plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>fs(c.raw)}} },
-      scales: { x:{ticks:{color:'#7a82a0',font:{size:10}},grid:{color:'#2a2f45'}},
-                y:{ticks:{callback:v=>(v>=0?'+':'')+'$'+(Math.abs(v)/1000).toFixed(0)+'k',color:'#7a82a0',font:{size:10}},grid:{color:'#2a2f45'}} } }
+    data: { labels: labels, datasets: [{ data: glData, backgroundColor: glColors, borderRadius: 5 }] },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(c) { return fs(c.raw); } } } },
+      scales: {
+        x: { ticks: { color: '#7a82a0', font: { size: 10 } }, grid: { color: '#2a2f45' } },
+        y: { ticks: { callback: function(v) { return (v>=0?'+':'-')+'$'+Math.round(Math.abs(v)/1000)+'k'; }, color: '#7a82a0', font: { size: 10 } }, grid: { color: '#2a2f45' } }
+      }
+    }
   });
 
   if (alC) alC.destroy();
-  alC = new Chart(document.getElementById('alChart'), {
+  alC = new Chart(alEl, {
     type: 'doughnut',
-    data: { labels: H.map(h=>h.t), datasets: [{ data: H.map(h=>+h.value.toFixed(0)), backgroundColor: pal, borderWidth: 0, hoverOffset: 6 }] },
-    options: { responsive:true, cutout:'65%', plugins:{ legend:{ position:'right', labels:{color:'#7a82a0',font:{size:11},boxWidth:10} }, tooltip:{callbacks:{label:c=>c.label+': '+f(c.raw)}} } }
+    data: { labels: labels, datasets: [{ data: alData, backgroundColor: pal, borderWidth: 0, hoverOffset: 6 }] },
+    options: {
+      responsive: true, cutout: '65%',
+      plugins: {
+        legend: { position: 'right', labels: { color: '#7a82a0', font: { size: 11 }, boxWidth: 10 } },
+        tooltip: { callbacks: { label: function(c) { return c.label + ': ' + f(c.raw); } } }
+      }
+    }
   });
 }
 
-// ── Holdings ─────────────────────────────────────────────────
+// ── Holdings tab ─────────────────────────────────────────────
 function renderHoldings() {
-  const H = getHoldings();
-  return `<div class="card" style="padding:0 16px">
-    <table style="margin-top:4px">
-      <thead><tr><th>Ticker</th><th>Shares</th><th>Avg $</th><th>Now</th><th>G/L</th><th>%</th></tr></thead>
-      <tbody>
-        ${H.map(h => {
-          const r = ((h.today-h.avgCost)/h.avgCost*100).toFixed(1);
-          return `<tr>
-            <td><span class="tkr">${h.t}</span></td>
-            <td>${h.shares.toLocaleString()}</td>
-            <td>${f(h.avgCost)}</td>
-            <td style="font-weight:700">${f(h.today)}</td>
-            <td class="${cl(h.gl)}" style="font-weight:600">${fs(h.gl)}</td>
-            <td><span class="pill ${cl(h.gl)}">${h.gl>=0?'+':''}${r}%</span></td>
-          </tr>`;
-        }).join('')}
-      </tbody>
-    </table>
-  </div>`;
+  var H = getHoldings();
+  var rows = '';
+  for (var i = 0; i < H.length; i++) {
+    var h = H[i];
+    var r = ((h.today - h.avgCost) / h.avgCost * 100).toFixed(1);
+    var g = cl(h.gl);
+    rows += '<tr>'
+      + '<td><span class="tkr">' + h.t + '</span></td>'
+      + '<td>' + h.shares.toLocaleString() + '</td>'
+      + '<td>' + f(h.avgCost) + '</td>'
+      + '<td style="font-weight:700">' + f(h.today) + '</td>'
+      + '<td class="' + g + '" style="font-weight:600">' + fs(h.gl) + '</td>'
+      + '<td><span class="pill ' + g + '">' + (h.gl >= 0 ? '+' : '') + r + '%</span></td>'
+      + '</tr>';
+  }
+  return '<div class="card" style="padding:0 16px">'
+    + '<table style="margin-top:4px">'
+    + '<thead><tr><th>Ticker</th><th>Shares</th><th>Avg $</th><th>Now</th><th>G/L</th><th>%</th></tr></thead>'
+    + '<tbody>' + rows + '</tbody></table></div>';
 }
 
-// ── All Lots ─────────────────────────────────────────────────
+// ── Lots tab ─────────────────────────────────────────────────
 function renderLots() {
-  return `<div class="card" style="padding:0 16px">
-    <table style="margin-top:4px">
-      <thead><tr><th>Date</th><th>Ticker</th><th>Qty</th><th>Buy $</th><th>G/L</th></tr></thead>
-      <tbody>
-        ${lots.map(l => {
-          const td = prices[l.t] || 0;
-          const gl = (td - l.p) * l.q;
-          return `<tr>
-            <td class="muted" style="font-size:11px">${l.d || '–'}</td>
-            <td><span class="tkr">${l.t}</span></td>
-            <td>${l.q}</td>
-            <td>${f(l.p)}</td>
-            <td class="${cl(gl)}" style="font-size:12px;font-weight:600">${td ? fs(gl) : '–'}</td>
-          </tr>`;
-        }).join('')}
-      </tbody>
-    </table>
-  </div>`;
+  var rows = '';
+  for (var i = 0; i < lots.length; i++) {
+    var l  = lots[i];
+    var px = prices[l.t] || 0;
+    var gl = (px - l.p) * l.q;
+    rows += '<tr>'
+      + '<td class="muted" style="font-size:11px">' + (l.d || '&ndash;') + '</td>'
+      + '<td><span class="tkr">' + l.t + '</span></td>'
+      + '<td>' + l.q + '</td>'
+      + '<td>' + f(l.p) + '</td>'
+      + '<td class="' + cl(gl) + '" style="font-size:12px;font-weight:600">' + (px ? fs(gl) : '&ndash;') + '</td>'
+      + '</tr>';
+  }
+  return '<div class="card" style="padding:0 16px">'
+    + '<table style="margin-top:4px">'
+    + '<thead><tr><th>Date</th><th>Ticker</th><th>Qty</th><th>Buy $</th><th>G/L</th></tr></thead>'
+    + '<tbody>' + rows + '</tbody></table></div>';
 }
 
-// ── Prices ───────────────────────────────────────────────────
+// ── Prices tab ───────────────────────────────────────────────
 function renderPrices() {
-  const hm = {};
-  getHoldings().forEach(h => hm[h.t] = h);
-  return `<div class="card">
-    <div class="card-title">Today's Prices &nbsp;<span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;color:var(--muted)">Edit to override locally</span></div>
-    ${Object.keys(prices).sort().map(t => {
-      const p = prices[t], h = hm[t];
-      return `<div class="prow">
-        <span style="flex:1;font-weight:600">${t}</span>
-        <span class="${h ? cl(h.gl) : 'muted'} prow-gl">${h ? fs(h.gl) : ''}</span>
-        <input type="number" value="${p}" step="0.01" onchange="updP('${t}',this.value)">
-      </div>`;
-    }).join('')}
-  </div>`;
+  var hm = {};
+  var H = getHoldings();
+  for (var i = 0; i < H.length; i++) hm[H[i].t] = H[i];
+  var tickers = Object.keys(prices).sort();
+  var rows = '';
+  for (var j = 0; j < tickers.length; j++) {
+    var t = tickers[j];
+    var p = prices[t];
+    var h = hm[t];
+    rows += '<div class="prow">'
+      + '<span style="flex:1;font-weight:600">' + t + '</span>'
+      + '<span class="' + (h ? cl(h.gl) : 'muted') + ' prow-gl">' + (h ? fs(h.gl) : '') + '</span>'
+      + '<input type="number" value="' + p + '" step="0.01" onchange="updP('' + t + '',this.value)">'
+      + '</div>';
+  }
+  return '<div class="card">'
+    + '<div class="card-title">Today's Prices <span style="font-weight:400;text-transform:none;font-size:11px;color:var(--muted)">Edit to override</span></div>'
+    + rows + '</div>';
 }
-function updP(t,v){ const n=parseFloat(v); if(!isNaN(n)&&n>0){prices[t]=n; render();} }
 
-// ── Add Purchase ─────────────────────────────────────────────
+function updP(t, v) {
+  var n = parseFloat(v);
+  if (!isNaN(n) && n > 0) { prices[t] = n; render(); }
+}
+
+// ── Add Purchase tab ─────────────────────────────────────────
 function renderAdd() {
-  return `<div class="card">
-    <div class="card-title">Record a Purchase</div>
-    <div class="form-grid">
-      <div class="form-field full">
-        <label>Ticker</label>
-        <input id="at" placeholder="e.g. AAPL" style="text-transform:uppercase" autocapitalize="characters">
-      </div>
-      <div class="form-field full">
-        <label>Date</label>
-        <input id="ad" type="date" value="${new Date().toISOString().slice(0,10)}">
-      </div>
-      <div class="form-field">
-        <label>Shares</label>
-        <input id="aq" type="number" placeholder="0" min="0" inputmode="decimal">
-      </div>
-      <div class="form-field">
-        <label>Buy Price $</label>
-        <input id="ap" type="number" placeholder="0.00" step="0.01" min="0" inputmode="decimal">
-      </div>
-    </div>
-    <button class="submit-btn" id="sbtn" onclick="submitPurchase()">Save to Google Sheet</button>
-    <div class="form-msg" id="fmsg"></div>
-  </div>
-
-  <div class="card">
-    <div class="card-title">Recent additions</div>
-    <div class="snap" id="recent">
-      ${lots.slice(-5).reverse().map(l => `
-        <div class="scard">
-          <div class="scard-l">
-            <div class="sk">${l.t}</div>
-            <div class="sh">${l.d || 'No date'}</div>
-          </div>
-          <div class="scard-r">
-            <div class="sp">${l.q} × ${f(l.p)}</div>
-            <div class="sg muted">${f(l.q * l.p)}</div>
-          </div>
-        </div>`).join('')}
-    </div>
-  </div>`;
+  var today = new Date().toISOString().slice(0,10);
+  var recentRows = '';
+  var recent = lots.slice(-5).reverse();
+  for (var i = 0; i < recent.length; i++) {
+    var l = recent[i];
+    recentRows += '<div class="scard">'
+      + '<div class="scard-l"><div class="sk">' + l.t + '</div><div class="sh">' + (l.d || 'No date') + '</div></div>'
+      + '<div class="scard-r"><div class="sp">' + l.q + ' &times; ' + f(l.p) + '</div><div class="sg muted">' + f(l.q * l.p) + '</div></div>'
+      + '</div>';
+  }
+  return '<div class="card">'
+    + '<div class="card-title">Record a Purchase</div>'
+    + '<div class="form-grid">'
+    + '<div class="form-field full"><label>Ticker</label><input id="at" placeholder="e.g. AAPL" style="text-transform:uppercase" autocapitalize="characters"></div>'
+    + '<div class="form-field full"><label>Date</label><input id="ad" type="date" value="' + today + '"></div>'
+    + '<div class="form-field"><label>Shares</label><input id="aq" type="number" placeholder="0" min="0" inputmode="decimal"></div>'
+    + '<div class="form-field"><label>Buy Price $</label><input id="ap" type="number" placeholder="0.00" step="0.01" min="0" inputmode="decimal"></div>'
+    + '</div>'
+    + '<button class="submit-btn" id="sbtn" onclick="submitPurchase()">Save to Google Sheet</button>'
+    + '<div class="form-msg" id="fmsg"></div>'
+    + '</div>'
+    + '<div class="card"><div class="card-title">Recent additions</div>'
+    + '<div class="snap" id="recent">' + recentRows + '</div></div>';
 }
 
-async function submitPurchase() {
-  const t = document.getElementById('at').value.trim().toUpperCase();
-  const d = document.getElementById('ad').value;
-  const q = parseFloat(document.getElementById('aq').value);
-  const p = parseFloat(document.getElementById('ap').value);
-  const msg = document.getElementById('fmsg');
-  const btn = document.getElementById('sbtn');
+function submitPurchase() {
+  var t   = document.getElementById('at').value.trim().toUpperCase();
+  var d   = document.getElementById('ad').value;
+  var q   = parseFloat(document.getElementById('aq').value);
+  var p   = parseFloat(document.getElementById('ap').value);
+  var msg = document.getElementById('fmsg');
+  var btn = document.getElementById('sbtn');
 
-  if (!t || !q || !p) { msg.textContent = 'Please fill in all fields.'; msg.style.color = 'var(--neg)'; return; }
+  if (!t || !q || !p) {
+    msg.textContent = 'Please fill in all fields.';
+    msg.style.color = 'var(--neg)';
+    return;
+  }
 
   btn.disabled = true;
   btn.textContent = 'Saving…';
   msg.textContent = '';
-  try {
-    await savePurchase(t, d, p, q);
-    // Optimistically add to local state
-    lots.push({ t, d, p, q });
-    if (!prices[t]) prices[t] = p;
-    msg.textContent = `✓ Saved ${q} × ${t} @ ${f(p)} to your sheet`;
-    msg.style.color = 'var(--pos)';
-    document.getElementById('at').value = '';
-    document.getElementById('aq').value = '';
-    document.getElementById('ap').value = '';
-    btn.textContent = 'Save to Google Sheet';
-    btn.disabled = false;
-    // Re-render recent list
-    const recent = document.getElementById('recent');
-    if (recent) recent.innerHTML = lots.slice(-5).reverse().map(l => `
-      <div class="scard">
-        <div class="scard-l"><div class="sk">${l.t}</div><div class="sh">${l.d||'No date'}</div></div>
-        <div class="scard-r"><div class="sp">${l.q} × ${f(l.p)}</div><div class="sg muted">${f(l.q*l.p)}</div></div>
-      </div>`).join('');
-  } catch(e) {
-    msg.textContent = 'Save failed: ' + e.message;
-    msg.style.color = 'var(--neg)';
-    btn.textContent = 'Save to Google Sheet';
-    btn.disabled = false;
-  }
+
+  savePurchase(t, d, p, q,
+    function(data) {
+      lots.push({ t: t, d: d, p: p, q: q });
+      if (!prices[t]) prices[t] = p;
+      msg.textContent = '✓ Saved ' + q + ' × ' + t + ' @ ' + f(p) + ' to your sheet';
+      msg.style.color = 'var(--pos)';
+      document.getElementById('at').value = '';
+      document.getElementById('aq').value = '';
+      document.getElementById('ap').value = '';
+      btn.textContent = 'Save to Google Sheet';
+      btn.disabled = false;
+      var recentEl = document.getElementById('recent');
+      if (recentEl) {
+        var rHtml = '';
+        var rec = lots.slice(-5).reverse();
+        for (var i = 0; i < rec.length; i++) {
+          var l = rec[i];
+          rHtml += '<div class="scard">'
+            + '<div class="scard-l"><div class="sk">' + l.t + '</div><div class="sh">' + (l.d||'No date') + '</div></div>'
+            + '<div class="scard-r"><div class="sp">' + l.q + ' &times; ' + f(l.p) + '</div><div class="sg muted">' + f(l.q*l.p) + '</div></div>'
+            + '</div>';
+        }
+        recentEl.innerHTML = rHtml;
+      }
+    },
+    function(err) {
+      msg.textContent = 'Save failed: ' + err;
+      msg.style.color = 'var(--neg)';
+      btn.textContent = 'Save to Google Sheet';
+      btn.disabled = false;
+    }
+  );
 }
 
 function showErr(msg) {
-  const body = document.getElementById('body');
-  body.insertAdjacentHTML('afterbegin', `<div class="err-bar">${msg}</div>`);
+  var body = document.getElementById('body');
+  var div  = document.createElement('div');
+  div.className = 'err-bar';
+  div.textContent = msg;
+  body.insertBefore(div, body.firstChild);
 }
 
 // ── Boot ─────────────────────────────────────────────────────
 buildNav();
-loadData();
+loadData(false);
 </script>
 </body>
 </html>
