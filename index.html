@@ -269,8 +269,8 @@ function buildNav() {
   for (var i = 0; i < TABS.length; i++) {
     var t = TABS[i];
     var on = t.id === activeTab ? ' on' : '';
-    tabHtml += '<div class="tab' + on + '" onclick="switchTab('' + t.id + '')">' + t.label + '</div>';
-    navHtml += '<button class="bnav-btn' + on + '" onclick="switchTab('' + t.id + '')">'
+    tabHtml += '<div class="tab' + on + '" onclick="switchTab(\'' + t.id + '\')">' + t.label + '</div>';
+    navHtml += '<button class="bnav-btn' + on + '" onclick="switchTab(\'' + t.id + '\')">'
              + '<span class="bnav-icon">' + t.icon + '</span>' + t.label + '</button>';
   }
   document.getElementById('tabs').innerHTML = tabHtml;
@@ -444,17 +444,22 @@ function renderPrices() {
     rows += '<div class="prow">'
       + '<span style="flex:1;font-weight:600">' + t + '</span>'
       + '<span class="' + (h ? cl(h.gl) : 'muted') + ' prow-gl">' + (h ? fs(h.gl) : '') + '</span>'
-      + '<input type="number" value="' + p + '" step="0.01" onchange="updP('' + t + '',this.value)">'
+      + '<input type="number" value="' + p + '" step="0.01" data-ticker="' + t + '" onchange="updPx(this)">'  
       + '</div>';
   }
   return '<div class="card">'
-    + '<div class="card-title">Today's Prices <span style="font-weight:400;text-transform:none;font-size:11px;color:var(--muted)">Edit to override</span></div>'
+    + '<div class="card-title">Today Prices <span style="font-weight:400;text-transform:none;font-size:11px;color:var(--muted)">Edit to override</span></div>'
     + rows + '</div>';
 }
 
 function updP(t, v) {
   var n = parseFloat(v);
   if (!isNaN(n) && n > 0) { prices[t] = n; render(); }
+}
+function updPx(el) {
+  var t = el.getAttribute("data-ticker");
+  var n = parseFloat(el.value);
+  if (t && !isNaN(n) && n > 0) { prices[t] = n; render(); }
 }
 
 // ── Add Purchase tab ─────────────────────────────────────────
