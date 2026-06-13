@@ -214,6 +214,8 @@ function loadData(manual) {
       try {
         var data = JSON.parse(xhr.responseText);
         if (data.error) throw new Error(data.error);
+        console.log('API response keys:', Object.keys(data));
+        console.log('prevClose sample:', JSON.stringify(data.prevClose).slice(0,100));
         lots      = data.lots;
         prices    = data.prices;
         prevClose = data.prevClose || {};
