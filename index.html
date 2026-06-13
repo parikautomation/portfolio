@@ -307,6 +307,7 @@ function renderDash() {
   }
 
   var holdingRows = '';
+  var totalDayChg = 0;
   for (var k = 0; k < H.length; k++) {
     var h        = H[k];
     var pc       = prevClose[h.t] || 0;
@@ -315,6 +316,7 @@ function renderDash() {
     var daySign  = dayChg >= 0 ? '+' : '';
     var dayCls   = cl(dayChg);
     var hasDay   = pc > 0;
+    if (hasDay) totalDayChg += dayChg;
     holdingRows += '<div class="holding-row">'
       + '<div class="hr-left">'
       + '<div class="hr-ticker">' + h.t + ' <span class="hr-shares">' + h.shares.toLocaleString() + ' sh</span></div>'
@@ -344,7 +346,10 @@ function renderDash() {
     + '<div class="card"><div class="card-title">Unrealised G/L</div><canvas id="glChart" height="180"></canvas></div>'
     + '<div class="card"><div class="card-title">Allocation</div><canvas id="alChart" height="180"></canvas></div>'
     + '<div class="card" style="padding:0;overflow:hidden">'
-    + '<div class="card-title" style="padding:14px 16px 10px">Today&#39;s Change</div>'
+    + '<div class="card-title" style="padding:14px 16px 10px;display:flex;justify-content:space-between;align-items:center">'
+    +   '<span>Today&#39;s Change</span>'
+    +   '<span style="font-size:17px;font-weight:700;letter-spacing:-.3px" class="' + cl(totalDayChg) + '">' + (totalDayChg >= 0 ? '+' : '') + f(totalDayChg) + '</span>'
+    + '</div>'
     + holdingRows
     + '</div>';
 }
