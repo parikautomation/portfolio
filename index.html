@@ -210,26 +210,24 @@ function loadData(manual) {
   var xhr = new XMLHttpRequest();
   xhr.open('GET', API + '?action=read&token=' + encodeURIComponent(TOKEN), true);
   xhr.onload = function() {
-    if (xhr.status === 200) {
-      try {
-        var data = JSON.parse(xhr.responseText);
-        if (data.error) throw new Error(data.error);
-        console.log('API response keys:', Object.keys(data));
-        console.log('prevClose:', data.prevClose ? JSON.stringify(data.prevClose).substring(0,200) : 'MISSING');
-        lots      = data.lots;
-        prices    = data.prices;
-        prevClose = data.prevClose || {};
-        dot.className = 'sync-dot';
-        lbl.textContent = 'Synced';
-        var now = new Date();
-        document.getElementById('tsline').textContent =
-          'Updated ' + now.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'}) + ' · tap Sync to refresh';
-        render();
-      } catch(e) {
-        onSyncFail(lbl, dot, manual, e.message);
-      }
-    } else {
-      onSyncFail(lbl, dot, manual, 'HTTP ' + xhr.status);
+    console.log('HTTP status:', xhr.status);
+    console.log('Raw response:', xhr.responseText.substring(0, 300));
+    try {
+      var data = JSON.parse(xhr.responseText);
+      if (data.error) { onSyncFail(lbl, dot, manual, data.error); return; }
+      lots      = data.lots      || [];
+      prices    = data.prices    || {};
+      prevClose = data.prevClose || {};
+      console.log('lots:', lots.length, 'prices:', Object.keys(prices).length, 'prevClose:', Object.keys(prevClose).length);
+      dot.className = 'sync-dot';
+      lbl.textContent = 'Synced';
+      var now = new Date();
+      document.getElementById('tsline').textContent =
+        'Updated ' + now.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'}) + ' · tap Sync to refresh';
+      render();
+    } catch(e) {
+      console.log('Parse error:', e.message, 'Response was:', xhr.responseText.substring(0,200));
+      onSyncFail(lbl, dot, manual, 'Parse error: ' + e.message);
     }
   };
   xhr.onerror = function() { onSyncFail(lbl, dot, manual, 'Network error'); };
