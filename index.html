@@ -83,6 +83,7 @@
   .holding-row:last-child { border-bottom: none; }
   .hr-left { flex: 1; min-width: 0; }
   .hr-ticker { font-size: 14px; font-weight: 700; font-family: 'SF Mono', monospace; }
+  .hr-shares { font-size: 11px; font-weight: 400; color: var(--muted); margin-left: 4px; font-family: var(--font); }
   .hr-meta { font-size: 11px; color: var(--muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .hr-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; margin-left: 12px; flex-shrink: 0; }
   .hr-gl { font-size: 15px; font-weight: 700; }
@@ -154,10 +155,11 @@
 </div>
 
 <script>
-var API        = 'https://script.google.com/macros/s/AKfycbw9CXCmaTwzg-z1cp_HMEYoaXRuQft214UhIEGlxg-786vfOrAYghGkjGOJMP5izOmrkg/exec';
+var API        = 'https://script.google.com/macros/s/AKfycbwcxqId2T_85JJsEoSkBzxzaYzfO6IfPG3ZaroKkabgeJeaW_LewrqgntA0e3QY_Da3OQ/exec';
 var TOKEN      = 'Dipupari12!@';
 var lots       = [];
 var prices     = {};
+var prevClose  = {};
 var activeTab  = 'dash';
 var glC, alC;
 
@@ -212,8 +214,9 @@ function loadData(manual) {
       try {
         var data = JSON.parse(xhr.responseText);
         if (data.error) throw new Error(data.error);
-        lots   = data.lots;
-        prices = data.prices;
+        lots      = data.lots;
+        prices    = data.prices;
+        prevClose = data.prevClose || {};
         dot.className = 'sync-dot';
         lbl.textContent = 'Synced';
         var now = new Date();
@@ -305,19 +308,23 @@ function renderDash() {
 
   var holdingRows = '';
   for (var k = 0; k < H.length; k++) {
-    var h       = H[k];
-    var ret     = h.gl;
-    var retPct  = ((h.today - h.avgCost) / h.avgCost * 100).toFixed(1);
-    var sign    = ret >= 0 ? '+' : '';
-    var glCls   = cl(ret);
+    var h        = H[k];
+    var pc       = prevClose[h.t] || 0;
+    var dayChg   = pc > 0 ? (h.today - pc) * h.shares : 0;
+    var dayPct   = pc > 0 ? ((h.today - pc) / pc * 100) : 0;
+    var daySign  = dayChg >= 0 ? '+' : '';
+    var dayCls   = cl(dayChg);
+    var hasDay   = pc > 0;
     holdingRows += '<div class="holding-row">'
       + '<div class="hr-left">'
-      + '<div class="hr-ticker">' + h.t + '</div>'
-      + '<div class="hr-meta">' + h.shares.toLocaleString() + ' sh &nbsp;&middot;&nbsp; avg ' + f(h.avgCost) + ' &nbsp;&middot;&nbsp; now ' + f(h.today) + '</div>'
+      + '<div class="hr-ticker">' + h.t + ' <span class="hr-shares">' + h.shares.toLocaleString() + ' sh</span></div>'
+      + '<div class="hr-meta">avg ' + f(h.avgCost) + ' &nbsp;&middot;&nbsp; now ' + f(h.today) + (pc > 0 ? ' &nbsp;&middot;&nbsp; prev ' + f(pc) : '') + '</div>'
       + '</div>'
       + '<div class="hr-right">'
-      + '<div class="hr-gl ' + glCls + '">' + sign + f(ret) + '</div>'
-      + '<div class="hr-pct ' + glCls + '">' + sign + retPct + '%</div>'
+      + (hasDay
+          ? '<div class="hr-gl ' + dayCls + '">' + daySign + f(dayChg) + '</div>'
+          + '<div class="hr-pct ' + dayCls + '">' + daySign + dayPct.toFixed(1) + '%</div>'
+          : '<div class="hr-gl muted">no prev close</div><div class="hr-pct muted">&ndash;</div>')
       + '</div></div>';
   }
 
@@ -337,7 +344,7 @@ function renderDash() {
     + '<div class="card"><div class="card-title">Unrealised G/L</div><canvas id="glChart" height="180"></canvas></div>'
     + '<div class="card"><div class="card-title">Allocation</div><canvas id="alChart" height="180"></canvas></div>'
     + '<div class="card" style="padding:0;overflow:hidden">'
-    + '<div class="card-title" style="padding:14px 16px 10px">Holdings &amp; Total Return</div>'
+    + '<div class="card-title" style="padding:14px 16px 10px">Today&#39;s Change</div>'
     + holdingRows
     + '</div>';
 }
